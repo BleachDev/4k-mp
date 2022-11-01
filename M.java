@@ -25,7 +25,7 @@ public class M extends Canvas {
 	private List<Socket> getClients() { clients.removeIf(Socket::isClosed); return clients; }
 
 	public static void main(String[] args) {
-		JFrame frame = new JFrame("Minecraft 4K");
+		JFrame frame = new JFrame();
 		frame.setSize(856, 480);
 		frame.setLocationRelativeTo(null);
 		frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
@@ -58,7 +58,6 @@ public class M extends Canvas {
 				game.clientAcceptor = new ServerSocket(25575);
 				game.server = new Socket("127.0.0.1", 25575);
 				frame.setTitle("Minecraft 4K HOSTING");
-				System.out.println("Hosting on " + game.clientAcceptor.getInetAddress());
 
 				selectFrame.setVisible(false);
 				frame.setVisible(true);
@@ -85,7 +84,7 @@ public class M extends Canvas {
 				try {
 					while (true) {
 						clients.add(clientAcceptor.accept());
-						System.out.println("Added " + clients.get(clients.size() - 1));
+						System.out.println("Accepted " + clients.get(clients.size() - 1));
 					}
 				} catch (Exception e) {
 					throw new RuntimeException(e);

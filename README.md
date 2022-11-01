@@ -13,4 +13,4 @@ LMB - Remove block
 RMB - Place block  
 1-7 - Select block type  
 
-##### Disclamier: I am not qualified to write networking code, you proably shouldn't let random people connect to your computer
+##### Disclamier: I am not qualified to write networking code, you probably shouldn't let random people connect to your computer.

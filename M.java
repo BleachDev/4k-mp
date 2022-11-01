@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 import javax.swing.*;
@@ -187,7 +186,11 @@ public class M extends Canvas {
 						world[i] = i / 64 % 64 > 32/* + random.nextInt(8)*/ ? random.nextInt(7) + 1 : 0;
 					}
 				} else {
-					requestWorld(world);
+					server.getOutputStream().write(0xff);
+					server.getOutputStream().flush();
+					for (int i = 0; i < world.length; i++) {
+						world[i] = server.getInputStream().read();
+					}
 				}
 
 				int playerId = 8;
@@ -496,18 +499,6 @@ public class M extends Canvas {
 				e.printStackTrace();
 			}
 		}).start();
-	}
-
-	private void requestWorld(int[] world) throws IOException {
-		System.out.println(server + " >> 0xFF");
-		server.getOutputStream().write(0xff);
-		server.getOutputStream().flush();
-		System.out.println(server + " << 0xFF START");
-		for (int i = 0; i < world.length; i++) {
-			world[i] = server.getInputStream().read();
-		}
-
-		System.out.println(server + " << 0xFF END");
 	}
 
 	public boolean handleEvent(Event event) {

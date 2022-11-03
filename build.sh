@@ -1,9 +1,9 @@
 rm -r out
 javac -d ./out M.java
-mkdir ./out/META-INF
+cd out
+mkdir ./META-INF
 echo "Manifest-Version: 1.0
 Class-Path: .
 Main-Class: M
-" >> ./out/META-INF/MANIFEST.MF
-cd out
+" >> ./META-INF/MANIFEST.MF
 zip -r9 ./../4K.jar *

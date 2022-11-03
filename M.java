@@ -212,6 +212,7 @@ public class M extends Canvas {
 				// Both yaw and pitch is in radians
 				float playerYaw = 0.0F;
 				float playerPitch = 0.0F;
+				int selectedBlock = 1;
 
 				while (true) {
 					int gameWidth = frame.getWidth() / scaleFactor;
@@ -296,6 +297,12 @@ public class M extends Canvas {
 						}
 					}
 
+					for (int i = 48; i <= 55; i++) {
+						if (this.events[i] > 0) {
+							selectedBlock = i - 47;
+						}
+					}
+
 					if (this.events[0] > 0 && rayBlock > 0) {
 						//world[rayBlock] = 0;
 						this.events[0] = 0;
@@ -309,7 +316,7 @@ public class M extends Canvas {
 						// world[rayBlock + rayDirection] = 1;
 						this.events[1] = 0;
 
-						server.getOutputStream().write(new byte[] { 1,
+						server.getOutputStream().write(new byte[] { (byte) selectedBlock,
 								(byte) (rayBlock + rayDirection & 255), (byte) (rayBlock + rayDirection >> 8 & 255), (byte) (rayBlock + rayDirection >> 16 & 255), (byte) (rayBlock + rayDirection >> 24 & 255) });
 						server.getOutputStream().flush();
 					}

@@ -305,8 +305,11 @@
         function startLoop() {
             document.getElementById("status-msg").innerHTML = "Room Code: " + roomCode;
 
+			let lastFrame = Date.now() - 15;
             setInterval(() => {
-                let startTime = Date.now();
+				let frameTime = Date.now() - lastFrame;
+				lastFrame = Date.now();
+			
                 let gameWidth = window.innerWidth / scaleFactor;
                 let gameHeight = window.innerHeight / scaleFactor;
 
@@ -331,8 +334,8 @@
                     }
 
                     if (mouseDelta > 0.0) {
-                        playerYaw += mouseX * mouseDelta / 25.0;
-                        playerPitch -= mouseY * mouseDelta / 25.0;
+                        playerYaw += mouseX * mouseDelta * (frameTime / 250);
+                        playerPitch -= mouseY * mouseDelta * (frameTime / 250);
                         if (playerPitch < -1.57) {
                             playerPitch = -1.57;
                         }
@@ -345,8 +348,8 @@
 
                 let inputForwards = 0.0;
                 let inputSideways = 0.0;
-                inputSideways += (events[0x57/*w*/] - events[0x53/*s*/]) * 0.02;
-                inputForwards += (events[0x44/*d*/] - events[0x41/*a*/]) * 0.02;
+                inputSideways += (events[0x57/*w*/] - events[0x53/*s*/]) * (frameTime / 750);
+                inputForwards += (events[0x44/*d*/] - events[0x41/*a*/]) * (frameTime / 750);
                 velocityX *= 0.5;
                 velocityY *= 0.99;
                 velocityZ *= 0.5;
@@ -400,14 +403,14 @@
                 }
 
                 if (events[0] > 0 && rayBlock > 0) {
-                    // world[rayBlock] = 0;
+                    world[rayBlock] = 0;
                     events[0] = 0;
 
                     serverCon.send([ 0, rayBlock & 255, rayBlock >> 8 & 255, rayBlock >> 16 & 255, rayBlock >> 24 & 255 ]);
                 }
 
                 if (events[1] > 0 && rayBlock > 0) {
-                    // world[rayBlock + rayDirection] = 1;
+                    world[rayBlock + rayDirection] = 1;
                     events[1] = 0;
 
                     serverCon.send([ selectedBlock, rayBlock + rayDirection & 255, rayBlock + rayDirection >> 8 & 255, rayBlock + rayDirection >> 16 & 255, rayBlock + rayDirection >> 24 & 255 ]);
@@ -545,7 +548,6 @@
                 rayBlock = i8;
 
                 frame.putImageData(frameData, 0, 0);
-                console.log(Date.now() - startTime);
             }, 15);
 
             onmousedown = e => {

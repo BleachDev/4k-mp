@@ -33,7 +33,7 @@
             image-rendering: pixelated;
         }
 
-        #center {
+        .center {
             margin: 0;
             position: absolute;
             top: 50%;
@@ -41,31 +41,70 @@
             transform: translate(-50%, -50%);
         }
 
+        .bottom-right {
+            padding: 4px 12px;
+            position: absolute;
+            top: 100%;
+            left: 100%;
+            transform: translate(-100%, -100%);
+        }
+
+        .bottom-left {
+            padding: 4px;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            transform: translate(0, -100%);
+        }
+
         #status-msg {
+            margin: 7px;
             position: absolute;
             left: 50%;
             top: 0;
             transform: translate(-50%, 0);
-            margin: 7px;
         }
 
         input {
             max-width: 250px;
         }
+
+        p {
+            margin: 0;
+            text-align: left;
+            color: #b0b0b0;
+        }
+
+        .color-link {
+            filter: grayscale(1) brightness(70%);
+            -webkit-filter: grayscale(1) brightness(70%);
+        }
     </style>
 </head>
 <body>
-    <div id="center">
+<div id="menu">
+    <div class="center">
         <h3>Minecraft 4K Multiplayer</h3>
         <input id="ip" type="text" placeholder="Room Code" autofocus>
         <button onclick="roomCode = document.getElementById('ip').value; join();">Join</button>
         <button onclick="roomCode = randomId(); host();">Host</button>
     </div>
+    <div class="bottom-left">
+        <p class="control-text">Controls:</p>
+        <p class="control-text"><b>WASD</b> Move</p>
+        <p class="control-text"><b>Space</b> Jump</p>
+        <p class="control-text"><b>LMB</b> Mine Block</p>
+        <p class="control-text"><b>RMB</b> Place Block</p>
+        <p class="control-text"><b>1-7</b> Select Block</p>
+    </div>
+    <div class="bottom-right">
+        <a class="color-link" href="https://github.com/BleachDev/4k-mp"><img src="https://bleach.dev/static/img/logos/github.svg" width="32"></a>
+    </div>
+</div>
 
-
-    <canvas id="canvas" hidden="hidden"></canvas>
-    <h3 id="status-msg"></h3>
-    <script>
+<canvas id="canvas" hidden="hidden"></canvas>
+<h3 id="status-msg"></h3>
+<script>
         const scaleFactor = 6;
         const events = new Uint16Array(32767);
         let world = new Uint8Array(262144/*64x64x64*/);
@@ -177,7 +216,7 @@
                     });
 
                     document.getElementById("canvas").hidden = false;
-                    document.getElementById("center").hidden = true;
+                    document.getElementById("menu").hidden = true;
                     console.log("join() done");
                     start();
                 });

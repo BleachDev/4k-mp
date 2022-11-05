@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <title>Minecraft 4K</title>
+
+    <meta name="description" content="Minecraft 4K trolling edition ft. garfield from garfield">
+
+    <meta property="og:site_name" content="bleach.dev">
+    <meta property="og:title" content="Minecraft 4K">
+    <meta property="og:url" content="https://4k.bleach.dev/">
+    <meta property="og:image" content="https://bleach.dev/static/icon.png">
+    <meta property="og:type" content="website">
+    <meta property="og:description" content="Minecraft 4K trolling edition ft. garfield from garfield">
+    <meta name="theme-color" content="#ebafcc">
+
+    <link rel="shortcut icon" type="image/x-icon" href="https://bleach.dev/static/icon.ico">
+    <link rel="stylesheet" href="https://bleach.dev/static/css/main.css">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Ubuntu+Mono&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+
+    <style>
+        canvas {
+            position:absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            image-rendering: pixelated;
+        }
+
+        #center {
+            margin: 0;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        #status-msg {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            transform: translate(-50%, 0);
+            margin: 7px;
+        }
+
+        input {
+            max-width: 250px;
+        }
+    </style>
+</head>
+<body>
+    <div id="center">
+        <h3>Minecraft 4K Multiplayer</h3>
+        <input id="ip" type="text" placeholder="Room Code" autofocus>
+        <button onclick="roomCode = document.getElementById('ip').value; join();">Join</button>
+        <button onclick="roomCode = randomId(); host();">Host</button>
+    </div>
+
+
+    <canvas id="canvas" hidden="hidden"></canvas>
+    <h3 id="status-msg"></h3>
+    <script>
+        const scaleFactor = 6;
+        const events = new Uint16Array(32767);
+        let world = new Uint8Array(262144/*64x64x64*/);
+        let roomCode;
+
+        // 1: GRASS
+        // 2: DIRT
+        // 3: STONE
+        // 4: BRICK
+        // 5: LOG
+        // 6: LEAVES
+        const texturePixels = new Uint32Array(196608/*256x16x48*/);
+
+        // Client Packets:
+        // [ID] + (int)[pos] -> Set block
+        // 0xFE -> Request player id
+        // 0xFF -> Request the entire world
+        let serverCon;
+
+        let clientAcceptor;
+        const clients = [];
+
+        let playerId = 8;
+        let maxPlayerId = playerId;
+        let playerX = 32.5;
+        let playerY = 0.0;
+        let playerZ = 32.5;
+        let velocityX = 0.0;
+        let velocityY = 0.0;
+        let velocityZ = 0.0;
+        let rayBlock = -1;
+        let rayDirection = 0;
+        // Both yaw and pitch is in radians
+        let playerYaw = 0.0;
+        let playerPitch = 0.0;
+        let selectedBlock = 1;
+
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has("code")) {
+            roomCode = urlParams.get("code");
+            join();
+        }
+
+        function randomId() {
+            let result = '';
+            const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            for (let i = 0; i < 5; i++) {
+                result += characters.charAt(Math.floor(Math.random() * characters.length));
+            }
+            return result;
+        }
+
+        function host() {
+            document.getElementById("status-msg").innerHTML = "Creating Server..";
+
+            clientAcceptor = new peerjs.Peer("minecraft4k-" + roomCode);
+            clientAcceptor.on('open', id => {
+                console.log('Server peer ID is: ' + id);
+
+                clientAcceptor.on('connection', clientCon => {
+                    console.log("Client Accepted", clientCon);
+                    clients.push(clientCon);
+
+                    clientCon.on('data', data => {
+                        const status = data[0];
+                        if (status == 0xFF) {
+                            console.log(clientCon + " << 0xFF - Sending client world");
+                            clientCon.send(world);
+                        } else if (status == 0xFE) {
+                            console.log(clientCon + " << 0xFE - Sending player id " + (maxPlayerId + 1));
+                            clientCon.send([ ++maxPlayerId ]);
+                        } else {
+                            for (const client2 of clients) {
+                                if (status >= 8 && client2 == clientCon) {
+                                    continue; // Don't send the player model block back to the client it belongs to
+                                }
+                                client2.send(data);
+                            }
+                        }
+                    });
+                });
+
+                join();
+            });
+        }
+
+        function join() {
+            document.getElementById("status-msg").innerHTML = "Joining Server..";
+
+            const refresh = window.location.protocol + "//" + window.location.host + window.location.pathname + '?code=' + roomCode;
+            window.history.pushState({ path: refresh }, '', refresh);
+
+            const toServerPeer = new peerjs.Peer();
+            toServerPeer.on('open', id => {
+                console.log('Client peer ID is: ' + id);
+
+                serverCon = toServerPeer.connect("minecraft4k-" + roomCode);
+                serverCon.on('open', () => {
+                    serverCon.on('data', data => {
+                        const status = data[0];
+                        if (status < 0xFE) {
+                            let pos = 0;
+                            for (let i = 0; i < 4; i++) {
+                                pos |= (data[i + 1] & 255) << (i * 8);
+                            }
+
+                            world[pos] = status;
+                        }
+                    });
+
+                    document.getElementById("canvas").hidden = false;
+                    document.getElementById("center").hidden = true;
+                    console.log("join() done");
+                    start();
+                });
+                serverCon.on('close', () => {
+                    document.getElementById("status-msg").innerHTML += "<span style='color: #ff5c5c;'> (Disconnected)</span>";
+                });
+            });
+        }
+
+        function start() {
+            document.getElementById("status-msg").innerHTML = "Creating World..";
+
+            for (let texId = 1; texId < 256; ++texId) {
+                let brightness = 255 - ((Math.random() * 96) | 0);
+
+                // y0-15 = top, y16-31 = side, y32-47 bottom
+                for (let y = 0; y < 48; ++y) {
+                    for (let x = 0; x < 16; ++x) {
+                        let baseColor = 0x966C4A;
+                        if (texId == 3) {
+                            baseColor = 0x7F7F7F;
+                        } else if (texId >= 8) {
+                            baseColor = (128 + 127 * (texId - 7 & 1)) | (128 + 127 * (texId - 7 >> 1 & 1)) << 8 | (128 + 127 * (texId - 7 >> 2 & 1)) << 16;
+                        }
+
+                        if (texId != 3 || ((Math.random() * 3) | 0) == 0) {
+                            brightness = 255 - ((Math.random() * 96) | 0);
+                        }
+
+                        if (texId == 1 && y < (x * x * 3 + x * 81 >> 2 & 3) + 18) {
+                            baseColor = 0x6AAA40;
+                        } else if (texId == 1 && y < (x * x * 3 + x * 81 >> 2 & 3) + 19) {
+                            brightness = brightness * 2 / 3;
+                        }
+
+                        if (texId == 5) {
+                            baseColor = 0x675231;
+                            if (x > 0 && x < 15 && (y > 0 && y < 15 || y > 32 && y < 47)) {
+                                baseColor = 0xBC9862;
+                                let i2 = x - 7;
+                                let i3 = (y & 15) - 7;
+                                if (i2 < 0) {
+                                    i2 = 1 - i2;
+                                }
+
+                                if (i3 < 0) {
+                                    i3 = 1 - i3;
+                                }
+
+                                if (i3 > i2) {
+                                    i2 = i3;
+                                }
+
+                                brightness = 196 - ((Math.random() * 32) | 0) + mod(i2, 3) * 32;
+                            } else if (((Math.random() * 2) | 0) == 0) {
+                                brightness = brightness * (150 - (x & 1) * 100) / 100;
+                            }
+                        }
+
+                        if (texId == 4) {
+                            baseColor = 0xB53A15;
+                            console.log(x, y, (x + ((y / 4) | 0) * 4), mod((x + ((y / 4) | 0) * 4), 8));
+                            if (mod((x + ((y / 4) | 0) * 4), 8) == 0 || mod(y, 4) == 0) {
+                                baseColor = 0xBCAFA5;
+                            }
+                        }
+
+                        if (y >= 32) {
+                            brightness = brightness / 2;
+                        }
+
+                        if (texId == 6) {
+                            baseColor = 0x50D937;
+                            if (((Math.random() * 2) | 0) == 0) {
+                                baseColor = 0;
+                                brightness = 255;
+                            }
+                        }
+
+                        const color = (baseColor >> 16 & 0xFF) * brightness / 255 << 16 |
+                            (baseColor >> 8 & 0xFF) * brightness / 255 << 8 |
+                            (baseColor & 0xFF) * brightness / 255;
+                        texturePixels[x + y * 16 + texId * 256 * 3] = color;
+                    }
+                }
+            }
+
+            if (clientAcceptor != null) {
+                for (let i = 0; i < 262144; ++i) {
+                    world[i] = mod(i / 64, 64) > 32/* + random.nextInt(8)*/ ? ((Math.random() * 7) | 0) + 1 : 0;
+                }
+
+                startLoop();
+            } else {
+                let sentWorld = false;
+                let sentPlayerId = false;
+                serverCon.on('data', data => {
+                    if (sentWorld) {
+                        return;
+                    }
+                    sentWorld = true;
+                    console.log("World", data);
+
+                    world = new Uint8Array(data);
+                    /*for (let i = 0; i < world.length; i++) {
+                        world[i] = data[i];
+                    }*/
+
+                    serverCon.on('data', data => {
+                        if (sentPlayerId) {
+                            return;
+                        }
+                        sentPlayerId = true;
+                        console.log("PlayerID", data);
+
+                        playerId = data[0] & 255;
+                        startLoop();
+                    });
+                    serverCon.send([ 0xfe ]);
+                });
+                serverCon.send([ 0xff ]);
+            }
+        }
+
+        function startLoop() {
+            document.getElementById("status-msg").innerHTML = "Room Code: " + roomCode;
+
+            setInterval(() => {
+                let startTime = Date.now();
+                let gameWidth = window.innerWidth / scaleFactor;
+                let gameHeight = window.innerHeight / scaleFactor;
+
+                const canvas = document.getElementById("canvas");
+                canvas.width = gameWidth;
+                canvas.height = gameHeight;
+                const frame = document.getElementById('canvas').getContext('2d');
+                const frameData = frame.createImageData(gameWidth, gameHeight);
+                const framePixels = frameData.data;
+
+                let sinYaw = Math.sin(playerYaw);
+                let cosYaw = Math.cos(playerYaw);
+                let sinPitch = Math.sin(playerPitch);
+                let cosPitch = Math.cos(playerPitch);
+
+                if (events[2] > 0) {
+                    let mouseX = (events[2] / window.innerWidth - 0.5) * 2;
+                    let mouseY = (events[3] / window.innerHeight - 0.5) * 2;
+                    let mouseDelta = Math.sqrt(mouseX * mouseX + mouseY * mouseY) - 0.2;
+                    if (mouseDelta < 0.0) {
+                        mouseDelta = 0.0;
+                    }
+
+                    if (mouseDelta > 0.0) {
+                        playerYaw += mouseX * mouseDelta / 25.0;
+                        playerPitch -= mouseY * mouseDelta / 25.0;
+                        if (playerPitch < -1.57) {
+                            playerPitch = -1.57;
+                        }
+
+                        if (playerPitch > 1.57) {
+                            playerPitch = 1.57;
+                        }
+                    }
+                }
+
+                let inputForwards = 0.0;
+                let inputSideways = 0.0;
+                inputSideways += (events[0x57/*w*/] - events[0x53/*s*/]) * 0.02;
+                inputForwards += (events[0x44/*d*/] - events[0x41/*a*/]) * 0.02;
+                velocityX *= 0.5;
+                velocityY *= 0.99;
+                velocityZ *= 0.5;
+                velocityX += sinYaw * inputSideways + cosYaw * inputForwards;
+                velocityZ += cosYaw * inputSideways - sinYaw * inputForwards;
+                velocityY += 0.003;
+
+                for (let axis = 0; axis < 3; ++axis) {
+                    let breaking = false;
+                    let newPlayerX = playerX + velocityX * (mod((axis + 0), 3) / 2);
+                    let newPlayerY = playerY + velocityY * (mod((axis + 1), 3) / 2);
+                    let newPlayerZ = playerZ + velocityZ * (mod((axis + 2), 3) / 2);
+                    //console.log(axis, playerX, newPlayerX);
+
+                    for (let i = 0; i < 12; ++i) {
+                        let playerCornerX = (newPlayerX + (i & 1) * 0.6 - 0.3) | 0;
+                        let playerCornerY = (newPlayerY + ((i >> 2) - 1) * 0.8 + 0.65) | 0;
+                        let playerCornerZ = (newPlayerZ + (i >> 1 & 1) * 0.6 - 0.3) | 0;
+                        if (playerCornerX < 0 || playerCornerY < 0 || playerCornerZ < 0 || playerCornerX >= 64 || playerCornerY >= 64 || playerCornerZ >= 64 || world[playerCornerX + playerCornerY * 64 + playerCornerZ * 4096] > 0) {
+                            if (axis == 1) {
+                                if (events[32] > 0 && velocityY > 0.0) {
+                                    events[32] = 0;
+                                    velocityY = -0.1;
+                                } else {
+                                    velocityY = 0.0;
+                                }
+                            }
+                            breaking = true;
+                            break;
+                        }
+                    }
+                    if (breaking) {
+                        continue;
+                    }
+
+                    let prevPos = ((playerX) | 0) + ((playerY) | 0) * 64 + ((playerZ) | 0) * 4096;
+                    let newPos = ((newPlayerX) | 0) + ((newPlayerY) | 0) * 64 + ((newPlayerZ) | 0) * 4096;
+                    if (prevPos != newPos) {
+                        serverCon.send([ 0, prevPos & 255, prevPos >> 8 & 255, prevPos >> 16 & 255, prevPos >> 24 & 255 ]);
+                        serverCon.send([ playerId, newPos & 255, newPos >> 8 & 255, newPos >> 16 & 255, newPos >> 24 & 255 ]);
+                    }
+                    playerX = newPlayerX;
+                    playerY = newPlayerY;
+                    playerZ = newPlayerZ;
+                }
+
+                for (let i = 48; i <= 55; i++) {
+                    if (events[i] > 0) {
+                        selectedBlock = i - 47;
+                    }
+                }
+
+                if (events[0] > 0 && rayBlock > 0) {
+                    // world[rayBlock] = 0;
+                    events[0] = 0;
+
+                    serverCon.send([ 0, rayBlock & 255, rayBlock >> 8 & 255, rayBlock >> 16 & 255, rayBlock >> 24 & 255 ]);
+                }
+
+                if (events[1] > 0 && rayBlock > 0) {
+                    // world[rayBlock + rayDirection] = 1;
+                    events[1] = 0;
+
+                    serverCon.send([ selectedBlock, rayBlock + rayDirection & 255, rayBlock + rayDirection >> 8 & 255, rayBlock + rayDirection >> 16 & 255, rayBlock + rayDirection >> 24 & 255 ]);
+                }
+
+                for (let i = 0; i < 12; ++i) {
+                    let playerCornerX = (playerX + (i & 1) * 0.6 - 0.3) | 0;
+                    let playerCornerY = (playerY + ((i >> 2) - 1) * 0.8 + 0.65) | 0;
+                    let playerCornerZ = (playerZ + (i >> 1 & 1) * 0.6 - 0.3) | 0;
+                    if (playerCornerX >= 0 && playerCornerY >= 0 && playerCornerZ >= 0 && playerCornerX < 64 && playerCornerY < 64 && playerCornerZ < 64) {
+                        world[playerCornerX + playerCornerY * 64 + playerCornerZ * 4096] = 0;
+                    }
+                }
+
+                let i8 = -1.0;
+
+                for (let gameX = 0; gameX < gameWidth; ++gameX) {
+                    let fovYaw = (gameX - gameWidth / 2) / 90.0;
+
+                    for (let gameY = 0; gameY < gameHeight; ++gameY) {
+                        let fovPitch = (gameY - gameHeight / 2) / 90.0;
+                        let f22 = cosPitch + fovPitch * sinPitch;
+                        let f23 = fovPitch * cosPitch - sinPitch;
+                        let f24 = fovYaw * cosYaw + f22 * sinYaw;
+                        let f25 = f22 * cosYaw - fovYaw * sinYaw;
+                        let baseColor = 0;
+                        let brightness = 255;
+                        let closest = 20.0;
+                        let f26 = 5.0;
+
+                        for (let axis = 0; axis < 3; ++axis) {
+                            let axisAngle = f24;
+                            if (axis == 1) {
+                                axisAngle = f23;
+                            }
+
+                            if (axis == 2) {
+                                axisAngle = f25;
+                            }
+
+                            let axisDistortion = 1.0 / (axisAngle < 0.0 ? -axisAngle : axisAngle);
+                            let f29 = f24 * axisDistortion;
+                            let f30 = f23 * axisDistortion;
+                            let f31 = f25 * axisDistortion;
+                            let f32 = playerX - (playerX | 0);
+                            if (axis == 1) {
+                                f32 = playerY - (playerY | 0);
+                            }
+
+                            if (axis == 2) {
+                                f32 = playerZ - (playerZ | 0);
+                            }
+
+                            if (axisAngle > 0.0) {
+                                f32 = 1.0 - f32;
+                            }
+
+                            let dist = axisDistortion * f32;
+                            let f34 = playerX + f29 * f32;
+                            let f35 = playerY + f30 * f32;
+                            let f36 = playerZ + f31 * f32;
+                            if (axisAngle < 0.0) {
+                                if (axis == 0) {
+                                    --f34;
+                                }
+
+                                if (axis == 1) {
+                                    --f35;
+                                }
+
+                                if (axis == 2) {
+                                    --f36;
+                                }
+                            }
+
+                            while (dist < closest) {
+                                let blockX = f34 | 0;
+                                let blockY = f35 | 0;
+                                let blockZ = f36 | 0;
+                                if (blockX < 0 || blockY < 0 || blockZ < 0 || blockX >= 64 || blockY >= 64 || blockZ >= 64) {
+                                    break;
+                                }
+
+                                let pos = blockX + blockY * 64 + blockZ * 4096;
+                                let blockId = world[pos];
+                                if (blockId > 0) {
+                                    let i6 = (((f34 + f36) * 16) | 0) & 15;
+                                    let i7 = (((f35 * 16.0) | 0) & 15) + 16;
+                                    if (axis == 1) {
+                                        i6 = ((f34 * 16.0) | 0) & 15;
+                                        i7 = ((f36 * 16.0) | 0) & 15;
+                                        if (f30 < 0.0) {
+                                            i7 += 32;
+                                        }
+                                    }
+
+                                    let i26 = 0xFFFFFF;
+                                    if (pos != rayBlock || i6 > 0 && mod(i7, 16) > 0 && i6 < 15 && mod(i7, 16) < 15) {
+                                        i26 = texturePixels[i6 + i7 * 16 + blockId * 256 * 3];
+                                    }
+
+                                    if (dist < f26 && gameX == ((events[2] / scaleFactor) | 0) && gameY == ((events[3] / scaleFactor) | 0)) {
+                                        i8 = pos;
+                                        rayDirection = 1;
+                                        if (axisAngle > 0.0) {
+                                            rayDirection = -1;
+                                        }
+
+                                        rayDirection <<= 6 * axis;
+                                        f26 = dist;
+                                    }
+
+                                    if (i26 > 0) {
+                                        baseColor = i26;
+                                        brightness = 255 - ((dist / 20.0 * 255.0) | 0);
+                                        brightness = brightness * (255 - mod((axis + 2), 3) * 50) / 255;
+                                        closest = dist;
+                                    }
+                                }
+
+                                f34 += f29;
+                                f35 += f30;
+                                f36 += f31;
+                                dist += axisDistortion;
+                            }
+                        }
+
+                        framePixels[(gameX + gameY * gameWidth) * 4] = (baseColor >> 16 & 0xFF) * brightness / 255;
+                        framePixels[(gameX + gameY * gameWidth) * 4 + 1] = (baseColor >> 8 & 0xFF) * brightness / 255;
+                        framePixels[(gameX + gameY * gameWidth) * 4 + 2] = (baseColor & 0xFF) * brightness / 255;
+                        framePixels[(gameX + gameY * gameWidth) * 4 + 3] = 255;
+                    }
+                }
+
+                rayBlock = i8;
+
+                frame.putImageData(frameData, 0, 0);
+                console.log(Date.now() - startTime);
+            }, 15);
+
+            onmousedown = e => {
+                if (e.button == 0) {
+					events[0] = 1;
+				}
+            };
+			oncontextmenu = e => {
+                events[1] = 1;
+				e.preventDefault();
+				return false;
+            };
+            onmouseup = e => {
+				if (e.button == 0) {
+					events[0] = 0;
+				}
+            };
+            onmousemove = e => {
+                events[2] = e.x;
+                events[3] = e.y;
+            };
+            document.getElementById("canvas").onmouseleave = e => {
+                for (let i = 0; i < events.length; i++)
+                    events[i] = 0;
+            };
+            onkeydown = e => {
+                events[e.keyCode] = 1;
+            };
+            onkeyup = e => {
+                events[e.keyCode] = 0;
+            };
+        }
+
+        function mod(x, y) {
+            return ((x % y) + y) % y;
+        }
+    </script>
+</body>
+</html>

@@ -349,8 +349,8 @@
 				let frameTime = Date.now() - lastFrame;
 				lastFrame = Date.now();
 			
-                let gameWidth = window.innerWidth / scaleFactor;
-                let gameHeight = window.innerHeight / scaleFactor;
+                let gameWidth = (window.innerWidth / scaleFactor) | 0;
+                let gameHeight = (window.innerHeight / scaleFactor) | 0;
 
                 const canvas = document.getElementById("canvas");
                 canvas.width = gameWidth;
